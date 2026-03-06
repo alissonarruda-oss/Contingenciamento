@@ -22,11 +22,9 @@ for i, doc in enumerate(docs):
     for name, page in excel_pages.items():
         if name.upper() in ["GRÁFICOS", "ANALYTICS", "DADOS", "TESTE"]:
             continue
-
         try:
             columns_str = page.columns.str
-            if not columns_str.contains("ENCERRAMENTO", case=False).any() and columns_str.contains("ESCRITÓRIO", case=False).any():
-                
+            if not columns_str.contains("ENCERRAMENTO", case=False).any() and columns_str.contains("ESCRITÓRIO", case=False).any() and not (page.columns == "OBS.").any():
                 page_limpa = page.dropna(how="all")
                 
                 mask_essencial = page_limpa["ESCRITÓRIO"].notna() & page_limpa["PARTE AUTORA"].notna() & page_limpa["PARTE RÉ"].notna()
@@ -37,7 +35,6 @@ for i, doc in enumerate(docs):
                 if not linhas_sem_essencial.empty:
                     linhas_sem_essencial["ARQUIVO_ORIGEM"] = doc.name
                     linhas_sem_essencial["ABA_ORIGEM"] = name
-                    linhas_sem_essencial["MOTIVO_ERRO"] = "Faltou ESCRITÓRIO, PARTE AUTORA ou PARTE RÉ"
                     outros.append(linhas_sem_essencial)
 
                 matched_mask = pd.Series(False, index=filtrados.index)
@@ -103,7 +100,7 @@ for i, doc in enumerate(docs):
 
                 df_outros = filtrados[~matched_mask].copy()
                 if not df_outros.empty:
-                    df_outros["ARQUIVO_ORIGEM"] = doc.name
+                    df_outros["ARQUIVO_ORIGEM"] = doc
                     df_outros["ABA_ORIGEM"] = name
                     outros.append(df_outros)
 
@@ -112,7 +109,7 @@ for i, doc in enumerate(docs):
 
     print(f"{'='*35 + ' '} {((i+1)/numDocs*100):.1f}% {' ' + '='*35}")
 
-with pd.ExcelWriter("FINAL - CONSOLIDADO - HIPOTECÁRIA_BANCO_SEC.xlsx", engine="openpyxl") as wr:
+with pd.ExcelWriter("CONSOLIDADO - HIPOTECÁRIA_BANCO_SEC.xlsx", engine="openpyxl") as wr:
     salvar_aba(banco["ativas"], wr, "Banco(Ativas)")
     salvar_aba(banco["passivas"], wr, "Banco(Passivas)")
     salvar_aba(hipo["ativas"], wr, "HIPO(Ativas)")

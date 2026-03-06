@@ -109,7 +109,7 @@ banco: dict[str, list[pd.DataFrame]] = {"ativas": [], "passivas": []}
 hipo: dict[str, list[pd.DataFrame]] = {"ativas": [], "passivas": []}
 sec: dict[str, list[pd.DataFrame]] = {"ativas": [], "passivas": []}
 trabalhistas: dict[str, list[pd.DataFrame]] = {"BANCO": [], "SERVICE": [], "PROMOTORA": []}
-outros: list[pd.DataFrame] = []
+outros: list[pd.DataFrame] = [].clear()
 
 
 def salvar_aba(lista_dfs: list[pd.DataFrame], writer, nome_aba) -> None:
