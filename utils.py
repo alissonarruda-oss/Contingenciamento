@@ -1,7 +1,21 @@
 import pandas as pd
 from pathlib import Path
 
+from openpyxl.styles import PatternFill, Font
+from openpyxl.utils import get_column_letter
+
 HEADERS = {
+    "ESSENCIAIS": [
+        "ESCRITÓRIO",
+        "CNPJ",
+        "PARTE AUTORA",
+        "PARTE RÉ",
+        "PROCESSO",
+        "UF",
+        "DATA DA AÇÃO",
+        "TIPO DE AÇÃO",
+        "PRODUTO",
+    ],
     "BH(ATIVAS)": [
         "ESCRITÓRIO",
         "CNPJ",
@@ -82,7 +96,6 @@ HEADERS = {
         "CNPJ",
         "PARTE AUTORA",
         "PARTE RÉ",
-        "CPF/CNPJ RÉ",
         "CRI",
         "NÚMERO DO PROCESSO",
         "UF",
@@ -105,16 +118,49 @@ HEADERS = {
     ],
 }
 
+COLS = ["ESCRITÓRIO", "PARTE AUTORA", "PARTE RÉ", "PRODUTO", "VALOR DA CAUSA", "VALOR DO RISCO ATUALIZADO", "PROBABILIDADE DE PERDA"]
+
 banco: dict[str, list[pd.DataFrame]] = {"ativas": [], "passivas": []}
 hipo: dict[str, list[pd.DataFrame]] = {"ativas": [], "passivas": []}
 sec: dict[str, list[pd.DataFrame]] = {"ativas": [], "passivas": []}
 trabalhistas: dict[str, list[pd.DataFrame]] = {"BANCO": [], "SERVICE": [], "PROMOTORA": []}
-outros: list[pd.DataFrame] = [].clear()
+outros: list[pd.Series] = []
 
 
-def salvar_aba(lista_dfs: list[pd.DataFrame], writer, nome_aba) -> None:
+def salvar_aba(lista_dfs: list[pd.Series], writer, nome_aba) -> None:
     if lista_dfs:
-        pd.concat(lista_dfs, ignore_index=True).drop_duplicates().to_excel(writer, sheet_name=nome_aba, index=False)
+        df_final = pd.DataFrame(lista_dfs).drop_duplicates()
+        df_final.to_excel(writer, sheet_name=nome_aba, index=False)
+        ws = writer.sheets[nome_aba]
+
+        fundo_preto = PatternFill(start_color="000000", end_color="000000", fill_type="solid")
+        fonte_branca = Font(color="FFFFFF", bold=True)
+        fundo_amarelo = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+        fundo_vermelho = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+
+        cols_monitoradas = ["ESCRITÓRIO", "PARTE AUTORA", "PARTE RÉ", "PRODUTO"]
+
+        for col_idx, col_name in enumerate(df_final.columns, start=1):
+            col_letter = get_column_letter(col_idx)
+
+            celula_cabecalho = ws.cell(row=1, column=col_idx)
+            celula_cabecalho.fill = fundo_preto
+            celula_cabecalho.font = fonte_branca
+
+            tamanho_maximo = max(df_final[col_name].astype(str).map(len).max(), len(str(col_name)))
+            ws.column_dimensions[col_letter].width = min(tamanho_maximo + 2, 70)
+
+            nome_coluna_atual = str(col_name).upper()
+
+            for row_idx in range(2, ws.max_row + 1):
+                celula = ws.cell(row=row_idx, column=col_idx)
+
+                if nome_coluna_atual in ["ARQUIVO_ORIGEM", "ABA_ORIGEM", "PROBLEMA"]:
+                    celula.fill = fundo_amarelo
+
+                elif nome_coluna_atual in cols_monitoradas:
+                    if celula.value is None or str(celula.value).strip() == "" or str(celula.value).lower() == "nan":
+                        celula.fill = fundo_vermelho
 
 
 def tree_search(path: Path, doc_type: str, is_root: bool = True) -> list[Path]:
@@ -128,3 +174,22 @@ def tree_search(path: Path, doc_type: str, is_root: bool = True) -> list[Path]:
         return []
     else:
         return docs
+
+def validador(page_headers, arr_final: list, outros: list, row: pd.Series, doc: Path, nome: str):
+    if len(page_headers) > 0:
+        if len(row) == len(page_headers):
+            row.index = page_headers
+            if all(pd.notna(row[col]) for col in COLS):
+                arr_final.append(row)
+            else:
+                row["ARQUIVO_ORIGEM"] = doc.name
+                row["ABA_ORIGEM"] = nome
+                row["PROBLEMA"] = "Informações não preenchidas"
+                outros.append(row)
+        else:
+            row["ARQUIVO_ORIGEM"] = doc.name
+            row["ABA_ORIGEM"] = nome
+            row["PROBLEMA"] = "Quantidade de colunas incorretas"
+            outros.append(row)
+    else:
+        arr_final.append(row)

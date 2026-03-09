@@ -25,108 +25,86 @@ for i, doc in enumerate(docs):
         try:
             columns_str = page.columns.str
             if not columns_str.contains("ENCERRAMENTO", case=False).any() and columns_str.contains("ESCRITÓRIO", case=False).any() and not (page.columns == "OBS.").any():
-                page_limpa = page.dropna(how="all")
-                
-                mask_essencial = page_limpa["ESCRITÓRIO"].notna() & page_limpa["PARTE AUTORA"].notna() & page_limpa["PARTE RÉ"].notna()
-                
-                filtrados = page_limpa[mask_essencial].copy()
-                
-                linhas_sem_essencial = page_limpa[~mask_essencial].copy()
-                if not linhas_sem_essencial.empty:
-                    linhas_sem_essencial["ARQUIVO_ORIGEM"] = doc.name
-                    linhas_sem_essencial["ABA_ORIGEM"] = name
-                    outros.append(linhas_sem_essencial)
+                if all(columns_str.contains(header, case=False).any() for header in HEADERS["ESSENCIAIS"]):
+                    pagina = page.dropna(how="all")
 
-                matched_mask = pd.Series(False, index=filtrados.index)
+                    if not columns_str.contains("DEPÓSITOS RECLAMANTE", case=False).any():
+                        for index, row in pagina.iterrows():
+                            if "BANCO" in str(row["PARTE AUTORA"]):
+                                validador(HEADERS["BH(ATIVAS)"], banco["ativas"], outros, row, doc, name)
 
-                if not columns_str.contains("DEPÓSITOS RECLAMANTE", case=False).any():
+                            elif "BANCO" in str(row["PARTE RÉ"]):
+                                validador(HEADERS["BH(PASSIVAS)"], banco["passivas"], outros, row, doc, name)
 
-                    mask_ba = filtrados["PARTE AUTORA"].str.contains("BANCO BARI", case=False, na=False)
-                    ba = filtrados[mask_ba]
-                    if not ba.empty:
-                        ba = ba.rename(columns=dict(zip(ba.columns, HEADERS["BH(ATIVAS)"])))
-                        banco["ativas"].append(ba)
+                            elif "HIPOTECÁRIA" in str(row["PARTE AUTORA"]):
+                                validador(HEADERS["BH(ATIVAS)"], hipo["ativas"], outros, row, doc, name)
 
-                    mask_bp = filtrados["PARTE RÉ"].str.contains("BANCO", case=False, na=False)
-                    bp = filtrados[mask_bp]
-                    if not bp.empty:
-                        bp = bp.rename(columns=dict(zip(bp.columns, HEADERS["BH(PASSIVAS)"])))
-                        banco["passivas"].append(bp)
+                            elif "HIPOTECÁRIA" in str(row["PARTE RÉ"]):
+                                validador(HEADERS["BH(PASSIVAS)"], hipo["passivas"], outros, row, doc, name)
 
-                    mask_ha = filtrados["PARTE AUTORA"].str.contains("HIPOTECÁRIA", case=False, na=False)
-                    ha = filtrados[mask_ha]
-                    if not ha.empty:
-                        ha = ha.rename(columns=dict(zip(ha.columns, HEADERS["BH(ATIVAS)"])))
-                        hipo["ativas"].append(ha)
+                            elif "SECURITIZADORA" in str(row["PARTE AUTORA"]):
+                                validador(HEADERS["SEC(ATIVAS)"], sec["ativas"], outros, row, doc, name)
 
-                    mask_hp = filtrados["PARTE RÉ"].str.contains("HIPOTECÁRIA", case=False, na=False)
-                    hp = filtrados[mask_hp]
-                    if not hp.empty:
-                        hp = hp.rename(columns=dict(zip(hp.columns, HEADERS["BH(PASSIVAS)"])))
-                        hipo["passivas"].append(hp)
-
-                    mask_sa = filtrados["PARTE AUTORA"].str.contains("SECURITIZADORA", case=False, na=False)
-                    sa = filtrados[mask_sa]
-                    if not sa.empty:
-                        sa = sa.rename(columns=dict(zip(sa.columns, HEADERS["SEC(ATIVAS)"])))
-                        sec["ativas"].append(sa)
-
-                    mask_sp = filtrados["PARTE RÉ"].str.contains("SECURITIZADORA", case=False, na=False)
-                    sp = filtrados[mask_sp]
-                    if not sp.empty:
-                        sp = sp.rename(columns=dict(zip(sp.columns, HEADERS["SEC(PASSIVAS)"])))
-                        sec["passivas"].append(sp)
-
-                    matched_mask = mask_ba | mask_bp | mask_ha | mask_hp | mask_sa | mask_sp
-
+                            elif "SECURITIZADORA" in str(row["PARTE RÉ"]):
+                                validador(HEADERS["SEC(PASSIVAS)"], sec["passivas"], outros, row, doc, name)
+                    else:
+                        for index, row in pagina.iterrows():
+                            if "BANCO" in str(row["PARTE RÉ"]):
+                                validador([], trabalhistas["BANCO"], outros, row, doc, name)
+                            elif "SERVICE" in str(row["PARTE RÉ"]):
+                                validador([], trabalhistas["SERVICE"], outros, row, doc, name)
+                            elif "PROMOTORA" in str(row["PARTE RÉ"]):
+                                validador([], trabalhistas["PROMOTORA"], outros, row, doc, name)
                 else:
+                    pagina_invalida = page.dropna(how="all")
 
-                    mask_tb = filtrados["PARTE RÉ"].str.contains("BANCO", case=False, na=False)
-                    tb = filtrados[mask_tb]
-                    if not tb.empty:
-                        trabalhistas["BANCO"].append(tb)
-
-                    mask_ts = filtrados["PARTE RÉ"].str.contains("SERVICE", case=False, na=False)
-                    ts = filtrados[mask_ts]
-                    if not ts.empty:
-                        trabalhistas["SERVICE"].append(ts)
-
-                    mask_tp = filtrados["PARTE RÉ"].str.contains("PROMOTORA", case=False, na=False)
-                    tp = filtrados[mask_tp]
-                    if not tp.empty:
-                        trabalhistas["PROMOTORA"].append(tp)
-
-                    matched_mask = mask_tb | mask_ts | mask_tp
-
-                df_outros = filtrados[~matched_mask].copy()
-                if not df_outros.empty:
-                    df_outros["ARQUIVO_ORIGEM"] = doc
-                    df_outros["ABA_ORIGEM"] = name
-                    outros.append(df_outros)
+                    for index, row in pagina_invalida.iterrows():
+                        row["ARQUIVO_ORIGEM"] = doc.name
+                        row["ABA_ORIGEM"] = name
+                        row["PROBLEMA"] = f"Colunas faltantes"
+                        outros.append(row)
 
         except Exception as e:
             print(f"Erro na aba '{name}': {e}")
 
     print(f"{'='*35 + ' '} {((i+1)/numDocs*100):.1f}% {' ' + '='*35}")
 
-with pd.ExcelWriter("CONSOLIDADO - HIPOTECÁRIA_BANCO_SEC.xlsx", engine="openpyxl") as wr:
-    salvar_aba(banco["ativas"], wr, "Banco(Ativas)")
-    salvar_aba(banco["passivas"], wr, "Banco(Passivas)")
-    salvar_aba(hipo["ativas"], wr, "HIPO(Ativas)")
-    salvar_aba(hipo["passivas"], wr, "HIPO(Passivas)")
-    salvar_aba(sec["ativas"], wr, "SEC(Ativas)")
-    salvar_aba(sec["passivas"], wr, "SEC(Passivas)")
+try:
+    with pd.ExcelWriter("CONSOLIDADO - HIPOTECÁRIA_BANCO_SEC.xlsx", engine="openpyxl") as wr:
+        salvar_aba(banco["ativas"], wr, "BANCO - ATIVAS")
+        salvar_aba(banco["passivas"], wr, "BANCO - PASSIVAS")
+        salvar_aba(hipo["ativas"], wr, "HIPO - ATIVAS")
+        salvar_aba(hipo["passivas"], wr, "HIPO - PASSIVAS")
+        salvar_aba(sec["ativas"], wr, "SEC - ATIVAS")
+        salvar_aba(sec["passivas"], wr, "SEC - PASSIVAS")
+except Exception as e:
+    print("ERRO AS CRIAR HIPOTECÁRIA_BANCO_SEC")
 
-with pd.ExcelWriter("TRABALHISTA - SERVICE E PROMOTORA.xlsx", engine="openpyxl") as wr:
-    salvar_aba(trabalhistas["SERVICE"], wr, "AÇÕES TRABALHISTAS - SERVICE")
-    salvar_aba(trabalhistas["PROMOTORA"], wr, "AÇÕES TRABALHISTAS - PROMOTORA")
+try:
+    with pd.ExcelWriter("TRABALHISTA - SERVICE E PROMOTORA.xlsx", engine="openpyxl") as wr:
+        salvar_aba(trabalhistas["SERVICE"], wr, "AÇÕES TRABALHISTAS - SERVICE")
+        salvar_aba(trabalhistas["PROMOTORA"], wr, "AÇÕES TRABALHISTAS - PROMOTORA")
+except Exception as e:
+    print("ERRO AS CRIAR TRABALHISTAS - SERVICE E PROMOTORA")
 
-with pd.ExcelWriter("TRABALHISTA - BANCO E HIPO.xlsx", engine="openpyxl") as wr:
-    salvar_aba(trabalhistas["BANCO"], wr, "AÇÕES TRABALHISTAS - BANCO")
+try:
+    with pd.ExcelWriter("TRABALHISTA - BANCO E HIPO.xlsx", engine="openpyxl") as wr:
+        salvar_aba(trabalhistas["BANCO"], wr, "AÇÕES TRABALHISTAS - BANCO")
+except Exception as e:
+    print("ERRO AS CRIAR TRABALHISTAS - BANCO E HIPO")
 
 if outros:
     with pd.ExcelWriter("VERIFICAR_OUTROS.xlsx", engine="openpyxl") as wr:
-        salvar_aba(outros, wr, "Nao Classificados")
+        problemas_unicos = set(row.get("PROBLEMA", "Erro Desconhecido") for row in outros)
+        for problema in problemas_unicos:
+
+            linhas_do_problema = [row for row in outros if row.get("PROBLEMA") == problema]
+
+            nome_aba = str(problema).replace(":", "-").replace("/", "-")
+            nome_aba = nome_aba[:31].strip()
+
+            salvar_aba(linhas_do_problema, wr, nome_aba)
+
     print("\n⚠️ Alguns registros não foram classificados. Verifique o arquivo 'VERIFICAR_OUTROS.xlsx'")
 
 print("\n✅ Relatórios exportados com sucesso!")
