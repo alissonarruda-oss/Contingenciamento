@@ -6,8 +6,8 @@ import shutil
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
-path = Path("OLIVEIRA PINTO")
-docs = tree_search(path, ".xlsx", False)
+path = Path("")
+docs = tree_search(path, ".xlsx")
 
 numDocs = len(docs)
 
