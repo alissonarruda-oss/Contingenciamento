@@ -4,9 +4,10 @@ from shutil import copy
 from openpyxl.styles import PatternFill, Font
 from openpyxl.utils import get_column_letter
 
-from services.constants import HEADERS, banco, hipo, sec, trabalhistas, outros
+from services.constants import HEADERS, banco, hipo, sec, trabalhistas, outros, encerradas
 
 def tree_search(path: Path, doc_type: str, is_root: bool = True) -> list[Path]:
+    """Percorre recursivamente o diretório informado e retorna todos os arquivos da extensão especificada encontrados em subpastas (exclui o diretório raiz)."""
     docs = []
     for p in path.iterdir():
         if p.is_dir():
@@ -20,6 +21,7 @@ def tree_search(path: Path, doc_type: str, is_root: bool = True) -> list[Path]:
 
 
 def salvar_aba(lista_dfs: list[pd.Series], writer: pd.ExcelWriter, nome_aba: str, colunas_esperadas: list[str] | None = None) -> None:
+    """Grava uma lista de registros como aba Excel, aplicando formatação visual: cabeçalho preto/branco, largura automática de colunas, destaque amarelo em colunas de erro e vermelho em campos críticos vazios."""
     if lista_dfs:
         df_final = pd.DataFrame(lista_dfs).drop_duplicates()
     else:
@@ -69,6 +71,7 @@ def salvar_aba(lista_dfs: list[pd.Series], writer: pd.ExcelWriter, nome_aba: str
 
 
 def exportar_consolidado() -> None:
+    """Gera o arquivo CONSOLIDADO - HIPOTECÁRIA_BANCO_SEC.xlsx copiando a base dados.xlsx e adicionando abas separadas para Banco, Hipotecária e Securitizadora (ativas e passivas)."""
     consolidado_path = "CONSOLIDADO - HIPOTECÁRIA_BANCO_SEC.xlsx"
     copy("dados.xlsx", consolidado_path)
 
@@ -85,6 +88,7 @@ def exportar_consolidado() -> None:
 
 
 def exportar_trabalhistas() -> None:
+    """Gera dois arquivos Excel de ações trabalhistas: um para Service e Promotora e outro para Banco e Hipotecária, cada um com abas por entidade."""
     with pd.ExcelWriter("TRABALHISTA_CONSOLIDADO - SERVICE e PROMOTORA.xlsx", engine="openpyxl") as wr:
         salvar_aba(trabalhistas["SERVICE"], wr, "AÇÕES TRABALHISTAS - SERVICE", HEADERS["TRABALHISTAS"])
         salvar_aba(trabalhistas["PROMOTORA"], wr, "AÇÕES TRABALHISTAS - PROMOTORA", HEADERS["TRABALHISTAS"])
@@ -95,6 +99,7 @@ def exportar_trabalhistas() -> None:
 
 
 def exportar_outros() -> None:
+    """Gera o arquivo VERIFICAR_OUTROS.xlsx com todos os registros que não puderam ser classificados, organizados em abas por escritório para facilitar revisão manual."""
     if not outros:
         return
 
@@ -113,3 +118,12 @@ def exportar_outros() -> None:
             salvar_aba(linhas_do_escritorio, wr, nome_aba)
 
     print("\n⚠️ Alguns registros não foram classificados. Verifique o arquivo 'VERIFICAR_OUTROS.xlsx'")
+
+
+def exportar_encerradas() -> None:
+    """Gera o arquivo ENCERRADAS.xlsx com todas as ações encerradas identificadas nas planilhas de entrada, removendo duplicatas."""
+    if not encerradas:
+        return
+
+    pd.DataFrame(encerradas).drop_duplicates().to_excel("ENCERRADAS.xlsx", index=False)
+             

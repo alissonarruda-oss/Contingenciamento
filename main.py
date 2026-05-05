@@ -4,13 +4,14 @@ import warnings
 from pathlib import Path
 
 from services.processor import processar_aba
-from services.path_logic import tree_search, exportar_consolidado, exportar_trabalhistas, exportar_outros
+from services.path_logic import tree_search, exportar_consolidado, exportar_trabalhistas, exportar_outros, exportar_encerradas
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 _start_time = arrow.now()
 
 def _elapsed() -> str:
+    """Retorna o tempo decorrido desde o início da execução no formato HH:MM:SS:cs."""
     delta = arrow.now() - _start_time
     total_seconds = delta.total_seconds()
     h = int(total_seconds // 3600)
@@ -40,5 +41,6 @@ for i, doc in enumerate(docs):
 exportar_consolidado()
 exportar_trabalhistas()
 exportar_outros()
+exportar_encerradas()
 
 print(f"\n✅ Relatórios exportados com sucesso! Tempo total: {_elapsed()}")

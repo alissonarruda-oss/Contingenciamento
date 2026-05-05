@@ -3,16 +3,18 @@ from pathlib import Path
 
 from services.constants import (
     HEADERS, COLS, MONETARIO, ABAS_IGNORADAS,
-    banco, hipo, sec, trabalhistas, outros,
+    banco, hipo, sec, trabalhistas, outros, encerradas
 )
 
 def rejeitar(row: pd.Series, outros: list[pd.Series], doc: Path, nome: str, problema: str) -> None:
+    """Marca uma linha como inválida, anotando a origem e o motivo da rejeição, e a envia para a lista de registros com problemas."""
     row["ARQUIVO_ORIGEM"] = doc.name
     row["ABA_ORIGEM"] = nome
     row["PROBLEMA"] = problema
     outros.append(row)
 
 def validador(page_headers: list[str], arr_final: list[pd.Series], outros: list[pd.Series], row: pd.Series, doc: Path, nome: str) -> None:
+    """Valida uma linha verificando quantidade de colunas, campos obrigatórios e conversão de valores monetários; adiciona ao destino correto ou rejeita com o motivo."""
     if len(page_headers) > 0:
         if len(row) == len(page_headers):
             row.index = page_headers
@@ -34,6 +36,7 @@ def validador(page_headers: list[str], arr_final: list[pd.Series], outros: list[
         arr_final.append(row)
 
 def classificar_civil(pagina: pd.DataFrame, doc: Path, name: str) -> None:
+    """Classifica cada linha de uma aba cível identificando a entidade (Banco, Hipotecária ou Securitizadora) e a posição (ativa/passiva) com base nas partes do processo."""
     for _, row in pagina.iterrows():
         parte_autora = str(row["PARTE AUTORA"])
         parte_re = str(row["PARTE RÉ"])
@@ -53,6 +56,7 @@ def classificar_civil(pagina: pd.DataFrame, doc: Path, name: str) -> None:
 
 
 def classificar_trabalhista(pagina: pd.DataFrame, doc: Path, name: str) -> None:
+    """Classifica cada linha de uma aba trabalhista roteando para a lista da entidade correspondente (Banco, Service, Promotora ou Hipotecária) com base na Parte Ré."""
     for _, row in pagina.iterrows():
         parte_re = str(row["PARTE RÉ"])
 
@@ -67,23 +71,30 @@ def classificar_trabalhista(pagina: pd.DataFrame, doc: Path, name: str) -> None:
 
 
 def processar_aba(name: str, page: pd.DataFrame, doc: Path) -> None:
+    """Ponto de entrada por aba: ignora abas desnecessárias, detecta o tipo da planilha (encerrada, cível ou trabalhista) e delega para o classificador adequado."""
     if name.upper() in ABAS_IGNORADAS:
         return
     
     try:
         columns_str = page.columns.str
-        if not columns_str.contains("ENCERRAMENTO", case=False).any() and not (page.columns == "OBS.").any():
-            if all(columns_str.contains(header, case=False).any() for header in HEADERS["ESSENCIAIS"]):
-                pagina = page.dropna(how="all")
+        if not columns_str.contains("ENCERRAMENTO", case=False).any():
+            if not (page.columns == "OBS.").any():
+                if all(columns_str.contains(header, case=False).any() for header in HEADERS["ESSENCIAIS"]):
+                    pagina = page.dropna(how="all")
 
-                if not columns_str.contains("DEPÓSITOS RECLAMANTE", case=False).any():
-                    classificar_civil(pagina, doc, name)
+                    if not columns_str.contains("DEPÓSITOS RECLAMANTE", case=False).any():
+                        classificar_civil(pagina, doc, name)
+                    else:
+                        classificar_trabalhista(pagina, doc, name)
                 else:
-                    classificar_trabalhista(pagina, doc, name)
-            else:
-                pagina_invalida = page.dropna(how="all")
-                for _, row in pagina_invalida.iterrows():
-                    rejeitar(row, outros, doc, name, "Colunas faltantes")
-
+                    pagina_invalida = page.dropna(how="all")
+                    for _, row in pagina_invalida.iterrows():
+                        rejeitar(row, outros, doc, name, "Colunas faltantes")
+        else:
+            pagina = page.dropna(how="all")
+            for _, row in pagina.iterrows():
+                encerradas.append(row)
+            
+            
     except Exception as e:
         print(f"Erro na aba '{name}': {e}")

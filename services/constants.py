@@ -149,3 +149,4 @@ hipo: dict[str, list[pd.DataFrame]] = {"ativas": [], "passivas": []}
 sec: dict[str, list[pd.DataFrame]] = {"ativas": [], "passivas": []}
 trabalhistas: dict[str, list[pd.DataFrame]] = {"BANCO": [], "SERVICE": [], "PROMOTORA": [], "HIPO": []}
 outros: list[pd.Series] = []
+encerradas: list[pd.Series] = []
